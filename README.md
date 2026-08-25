@@ -29,6 +29,8 @@ CUT&Tag, and multimodal imaging (ChromSTEM, STORM, PWS).
 | `CutTag/` | CUT&Tag processing pipeline |
 | `long_read_COP/` | Long-read nascent RNA-seq (RREA) splicing analysis |
 | `imaging_analysis_scripts/` | PWS, EU-STORM, EdU/K9-STORM, ChromSTEM analysis |
+| `chrom_STEM/` | ChromSTEM analysis code |
+| `imaging_data/` | Raw imaging data (CSVs) underlying the imaging analyses above — not code |
 
 Each folder has its own `README.md` with a script-by-script breakdown and,
 where confirmed, the specific figure/panel each script produces. See
