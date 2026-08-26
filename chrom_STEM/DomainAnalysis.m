@@ -2,9 +2,9 @@
 %Initialization
 clear all;
 
-ImageFile = 'POL2AID.tiff'; %import image for analysis
-DomainCenterCSV = 'POL2AID_centers.csv'; %CSV of domain center position (in pixel!)
-OutputDirectory = 'POL2AID150'; %name of the output directory
+ImageFile = 'POL2CTRL.tiff'; %import image for analysis
+DomainCenterCSV = 'POL2CTRL_centers.csv'; %CSV of domain center position (in pixel!)
+OutputDirectory = 'POL2CTRL150'; %name of the output directory
 
 dr = 2.0; %pixel size in nm
 hw = 150; %max half window for MS analysis in pixel
