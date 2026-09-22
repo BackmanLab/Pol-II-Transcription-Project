@@ -8,8 +8,8 @@ normalization scale factors (see that folder's README).
 
 1. `genome/ref_hisat/build.sh`, `genome/rsem/build_reference.sh` — build
    references (run once).
-2. `submit.sh` → `fastq/alignment_hisat_V2.sh` — per-sample QC, trimming,
-   HISAT2 alignment, and counting.
+2. `submit_EUseq.sh` → `align_euseq.sh` — per-sample QC, trimming,
+   HISAT2 alignment, filtering, and sorting.
 3. `BAM/strand.sh` — empirically confirms library strandedness (same method
    as `RIPseq_analysis`'s `strandedness.sh`; confirmed **sense**-stranded
    for this library — the opposite convention from RIP-seq's confirmed
