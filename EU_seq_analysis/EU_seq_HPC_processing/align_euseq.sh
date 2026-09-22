@@ -1,6 +1,7 @@
 #!/bin/bash
 ##################################################################
 # Author: Lucas Carter
+# Email: lucascarter2025@u.northwestern.edu
 # PI: Vadim Backman
 # Description:
 # EU-seq alignment pipeline (paired-end). Performs trimming,
