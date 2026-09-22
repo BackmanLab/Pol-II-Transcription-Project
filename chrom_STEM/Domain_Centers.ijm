@@ -1,6 +1,6 @@
 Gaussian_radius = 5;
 CLAHE_blocksize = 120;
-Prominence = 1.5; //Criteria for Domain Center
+Prominence = 2; //Criteria for Domain Center
 
 run("Z Project...", "projection=[Average Intensity]");
 run("Gaussian Blur...", "sigma=Gaussian_radius");
