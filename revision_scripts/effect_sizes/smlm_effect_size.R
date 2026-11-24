@@ -15,14 +15,15 @@ smlm_effect_sizes <- function(
     normalization_radius_nm = 80,
     n_boot = 10000,
     seed   = 102726) {
-  
+
   # ---- input checks ------------------------------------------------------------
   paths <- file.path(in_dir, vapply(datasets, function(d) d$file, character(1)))
   if (any(!file.exists(paths))) stop("Input file(s) not found: ", paste(paths[!file.exists(paths)], collapse = ", "))
   if (!requireNamespace("arrow", quietly = TRUE)) stop("R package 'arrow' is not installed")  # ARROWCHECK
-  
+  if (!requireNamespace("lmerTest", quietly = TRUE)) stop("R package 'lmerTest' is not installed")
+
   bin_labels <- c("Small", "Average", "Large")
-  
+
   # ---- Hedges' g (treated minus control) ----------------------------------------
   hedges_g <- function(ctrl, trt) {
     n1 <- length(ctrl)
@@ -33,10 +34,10 @@ smlm_effect_sizes <- function(
     j <- 1 - 3 / (4 * (n1 + n2) - 9)
     d * j
   }
-  
+
   set.seed(seed)
   rows <- list()
-  
+
   for (nm in names(datasets)) {
     ds <- datasets[[nm]]
     f  <- file.path(in_dir, ds$file)
@@ -47,16 +48,20 @@ smlm_effect_sizes <- function(
     x$condition <- as.character(x$condition)
     cat("\n==== ", nm, " (", ds$file, ") ====\nDomains per condition:\n", sep = ""); print(table(x$condition))
     for (cn in c(ds$control, ds$treated)) if (!cn %in% x$condition) stop("Condition '", cn, "' not found in ", ds$file)
-    
+
     x <- x[x$condition %in% c(ds$control, ds$treated), ]
     if (anyNA(x[, c("cell_id", "seedCluster_size", "density")])) stop("NA values in cell_id, seedCluster_size or density in ", ds$file)
     if (any(x$seedCluster_size <= 0)) stop("Non-positive seedCluster_size in ", ds$file)
-    
+    x$cell_key <- paste(x$condition, x$cell_id, sep = "|")   # cell ids repeat across conditions
+
+    # each cell_id must be one cell: cluster_idx runs 0..(domains - 1) within every cell, without repeats
+    idx_ok <- tapply(x$cluster_idx, x$cell_key, function(v) !anyDuplicated(v) && min(v) == 0 && max(v) == length(v) - 1)
+    if (!all(idx_ok)) stop(nm, ": cluster_idx is not 0..(n - 1) without repeats in cells: ", paste(names(idx_ok)[!idx_ok], collapse = ", "))
+
     # same definitions as EDU.K9_STORM.R: radius = R * sqrt(seedCluster_size), R = 80 nm; bins right-closed
     x$radius_nm <- normalization_radius_nm * sqrt(x$seedCluster_size)
     x$bin <- cut(x$radius_nm, breaks = c(-Inf, ds$breaks, Inf), labels = bin_labels, right = TRUE)
-    x$cell_key <- paste(x$condition, x$cell_id, sep = "|")   # cell ids repeat across conditions
-    
+
     # ---- self-checks on the live data: counts must reproduce the manuscript ----------
     n_cells <- c(ctrl = length(unique(x$cell_key[x$condition == ds$control])),
                  trt  = length(unique(x$cell_key[x$condition == ds$treated])))
@@ -70,7 +75,7 @@ smlm_effect_sizes <- function(
     if (any(n_dom != ds$expected_domains))     stop(nm, ": domain counts differ from expected_domains")
     if (any(bins_ctrl != ds$expected_bins$ctrl) || any(bins_trt != ds$expected_bins$trt)) stop(nm, ": size-bin counts differ from expected_bins")
     cat("Self-check passed: cell, domain and size-bin counts match the manuscript\n")
-    
+
     # ---- one row per cell (zero counts kept) ----------------------------------------------
     cells <- unique(x[, c("cell_key", "condition")])
     cells <- cells[order(cells$cell_key), ]
@@ -86,15 +91,34 @@ smlm_effect_sizes <- function(
               all(pc$domains_total == pc$domains_small + pc$domains_average + pc$domains_large))
     ctrl_pc <- pc[pc$condition == ds$control, ]
     trt_pc  <- pc[pc$condition == ds$treated, ]
-    
+
     # g must equal the pooled-variance t statistic conversion (live data)
     chk_t <- unname(t.test(trt_pc$domains_total, ctrl_pc$domains_total, var.equal = TRUE)$statistic)
     chk_d <- chk_t * sqrt(1 / nrow(trt_pc) + 1 / nrow(ctrl_pc))
     chk_j <- 1 - 3 / (4 * (nrow(trt_pc) + nrow(ctrl_pc)) - 9)
     stopifnot(isTRUE(all.equal(hedges_g(ctrl_pc$domains_total, trt_pc$domains_total), chk_d * chk_j)))
     cat("Self-check passed: g matches the pooled t-statistic conversion\n")
+
+    # ---- domain-level linear mixed model: value ~ condition + (1 | cell) -----------------
+    # every domain is used; the random intercept per cell accounts for domains nested in cells
+    x$condition_f <- factor(x$condition, levels = c(ds$control, ds$treated))
+    fit_lmm <- function(v) {
+      fit <- lmerTest::lmer(stats::as.formula(paste(v, "~ condition_f + (1 | cell_key)")), data = x, REML = TRUE)
+      stopifnot(stats::nobs(fit) == nrow(x),
+                unname(lme4::ngrps(fit)["cell_key"]) == sum(n_cells))
+      co <- summary(fit)$coefficients
+      term <- paste0("condition_f", ds$treated)
+      if (!term %in% rownames(co)) stop("LMM term '", term, "' not found; terms: ", paste(rownames(co), collapse = ", "))
+      cat("LMM ", v, ": ", stats::nobs(fit), " domains in ", sum(n_cells), " cells, treated - control = ",
+          signif(co[term, "Estimate"], 3), ", P = ", signif(co[term, "Pr(>|t|)"], 3), "\n", sep = "")
+      c(lmm_diff = co[term, "Estimate"], lmm_se = co[term, "Std. Error"],
+        lmm_df = co[term, "df"], p_lmm = co[term, "Pr(>|t|)"])
+    }
+    lmm <- list(mean_radius_nm = fit_lmm("radius_nm"),
+                mean_density   = fit_lmm("density"))
     
     # ---- Hedges' g per measure, bootstrap over cells within each condition ------------------
+    # p_cell_welch: Welch t-test across cells (one value per cell)
     measures <- c("domains_total", "domains_small", "domains_average", "domains_large", "mean_radius_nm", "mean_density")
     for (m in measures) {
       ctrl <- ctrl_pc[[m]]
@@ -103,6 +127,8 @@ smlm_effect_sizes <- function(
       bg   <- replicate(n_boot, hedges_g(sample(ctrl, replace = TRUE), sample(trt, replace = TRUE)))
       ci   <- quantile(bg, c(0.025, 0.975), names = FALSE)
       stopifnot(ci[1] <= g, g <= ci[2])
+      p_cell <- t.test(trt, ctrl)$p.value
+      lm_m <- if (m %in% names(lmm)) lmm[[m]] else c(lmm_diff = NA, lmm_se = NA, lmm_df = NA, p_lmm = NA)
       rows[[length(rows) + 1]] <- data.frame(
         assay      = paste0("SMLM_", nm),
         comparison = paste0(ds$treated, "_vs_", ds$control),
@@ -110,15 +136,22 @@ smlm_effect_sizes <- function(
         size_bins_nm = paste0("<=", ds$breaks[1], " / ", ds$breaks[1], "-", ds$breaks[2], " / >", ds$breaks[2]),
         n_cells_ctrl = length(ctrl),
         n_cells_trt  = length(trt),
+        n_domains_ctrl = unname(n_dom["ctrl"]),
+        n_domains_trt  = unname(n_dom["trt"]),
         mean_ctrl    = mean(ctrl),
         mean_trt     = mean(trt),
         hedges_g     = g,
         ci_lo        = ci[1],
         ci_hi        = ci[2],
+        p_cell_welch = p_cell,
+        lmm_diff     = unname(lm_m["lmm_diff"]),
+        lmm_se       = unname(lm_m["lmm_se"]),
+        lmm_df       = unname(lm_m["lmm_df"]),
+        p_lmm        = unname(lm_m["p_lmm"]),
         stringsAsFactors = FALSE)
     }
   }
-  
+
   res <- do.call(rbind, rows)
   rownames(res) <- NULL
   cat("\n")

@@ -88,14 +88,15 @@ from the same directory.
 Each script writes a CSV of standardized effect sizes (Hedges' g or the
 measure named below, with 95% confidence intervals) for POLR2A degradation and
 ActD treatment. `compile_effect_size_table.R` combines them into Supplementary
-Table 1.
+Table 1. `smlm_effect_size.R` also writes the cell-level P-values reported in
+Supplementary Table 3.
 
 | Script | Figure / table | Description |
 |---|---|---|
 | `pws_effect_size.R` | Supplementary Table 1 | PWS nuclear packing scaling, diffusion and fractional moving mass |
 | `chromstem_domain_loss_effect_size.R` | Fig. 7e (bar chart), SI Fig. 14h, Supplementary Table 1 | ChromSTEM domain count ratios (treated to control) by domain category and size class, and domain packing scaling, radius and chromatin volume concentration |
 | `eustorm_effect_size.R` | Supplementary Table 1 | EU-STORM cluster size and blink density |
-| `smlm_effect_size.R` | Supplementary Table 1 | EdU and H3K9me3 SMLM domain counts, radius and density, by domain size category |
+| `smlm_effect_size.R` | Supplementary Tables 1 and 3 | EdU and H3K9me3 SMLM domain counts, radius and density, by domain size category. Also tests each measure with cells as the unit (Welch's t-test across per-cell values) and fits a linear mixed model with cell as a random intercept to domain radius and density (Supplementary Table 3) |
 | `euseq_effect_size.R` | Supplementary Table 1 | EU-seq median log2 fold change, median per-gene Hedges' g and fraction of genes with log2 fold change < −1, overall and by expression tertile |
 | `tad_insulation_effect_size.R` | SI Fig. 7c-f, Supplementary Table 1 | Boundary insulation score for TADs called in Wildtype and POLR2A-degraded cells, with and without CTCF-bounded boundaries |
 | `compartment_effect_sizes.R` | SI Fig. 8e, Supplementary Table 1 | Genome-wide and per-chromosome compartment strength, and per-corner compartment interaction scores by expression |
